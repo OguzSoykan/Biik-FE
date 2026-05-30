@@ -55,4 +55,29 @@ export const batchUpload = async (files) => {
   return res.data
 }
 
+// ---------------------------------------------------------------------------
+// RAG / Agent endpoint'leri
+// ---------------------------------------------------------------------------
+
+/**
+ * LangGraph agent'ı çalıştırır, GraphRAG tabanlı aday önerisi döner.
+ * @param {string} query
+ * @returns {Promise<{query: string, answer: string}>}
+ */
+export const recommendCandidates = async (query) => {
+  const res = await api.post('/recommend', { query })
+  return res.data
+}
+
+/**
+ * Doğrudan vector search — agent olmadan ham sonuçlar.
+ * @param {string} query
+ * @param {number} top_k
+ * @returns {Promise}
+ */
+export const searchCandidates = async (query, top_k = 10) => {
+  const res = await api.post('/search', { query, top_k })
+  return res.data
+}
+
 export default api
