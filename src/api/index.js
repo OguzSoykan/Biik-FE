@@ -16,7 +16,7 @@ export const uploadCV = (file) => {
   return api.post('/ingest', form)
 }
 
-export const getCandidates = () => api.get('/candidates')
+export const getCandidates = (params = {}) => api.get('/candidates', { params })
 
 export const convertCV = (filename) => api.post('/convert', { filename })
 
