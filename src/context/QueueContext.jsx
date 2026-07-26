@@ -1,29 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { batchIngestFiles } from '../api/cv'
-import { streamBulkProcess } from '../api/processing'
+import { startBulkProcess, streamJobEvents } from '../api/processing'
 import { QUEUE_STATUS, STEP_KEYS } from '../constants/pipeline'
 import { QueueContext } from './queue-context'
 
 /**
- * Global CV işleme kuyruğu.
+ * Global CV işleme kuyruğu — sunucu-sahipli job modeli.
  *
- * CVManager'daki sayfa-lokal state'in yerini alır:
- * - Sekme değiştirmek ilerlemeyi KAYBETTIRMEZ (state provider'da yaşar,
- *   SSE okuma döngüsü route değişiminden etkilenmez).
- * - İşleme sürerken yeni dosya eklenebilir: yeni gelenler "queued" bekler,
- *   aktif batch bitince otomatik yeni /bulk-process turu başlar.
- * - Başarısız/yarıda kalmış CV'ler tek tek yeniden denenebilir.
- * - Kuyruk görüntüsü localStorage'da saklanır: sayfa yenilenince son bilinen
- *   durum geri gelir; yenileme anında "running/queued" olanlar "interrupted"
- *   işaretlenir (SSE bağlantısı koptuğu için sunucudaki işleme durmuştur).
- *
- * Bilinen sınır: /bulk-process istemci bağlantısına bağlıdır — kalıcı,
- * sunucu-sahipli kuyruk için backend'de job_id tabanlı arka plan işleme
- * gerekir. O geçişte yalnızca bu provider ve api/processing.js değişir.
+ * - /bulk-process job_id döner; pipeline SUNUCUDA koşar. Sekme kapansa,
+ *   sayfa yenilense bile işleme devam eder.
+ * - Provider, aktif job_id'yi localStorage'da saklar; açılışta job'a yeniden
+ *   bağlanıp olayları ?since=0'dan replay ederek durumu aynen kurar.
+ * - Ağ koptuğunda kaldığı olay index'inden backoff'lu yeniden bağlanır.
+ * - İşleme sürerken yeni dosya eklenebilir: queued'lar aktif job bitince
+ *   otomatik yeni job olarak gönderilir (sunucu job'ları zaten sıraya sokar).
+ * - Başarısız CV'ler tekil olarak yeniden denenebilir.
  */
 
-const STORAGE_KEY = 'biik-queue-v1'
+const STORAGE_KEY = 'biik-queue-v2'
+const ACTIVE_JOB_KEY = 'biik-active-job-v2'
+const MAX_RECONNECT_ATTEMPTS = 5
 
 function makeInitialSteps() {
   return Object.fromEntries(
@@ -37,41 +34,48 @@ function makeItem(filename) {
   return { filename, status: QUEUE_STATUS.QUEUED, steps, error: null, addedAt: Date.now() }
 }
 
-function loadPersisted() {
+function loadPersistedItems() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return {}
-    const items = JSON.parse(raw)
-    // Önceki oturumda yarıda kalanları işaretle — SSE koptuğu için sunucu durdu
-    for (const item of Object.values(items)) {
-      if (item.status === QUEUE_STATUS.RUNNING || item.status === QUEUE_STATUS.QUEUED) {
-        item.status = QUEUE_STATUS.INTERRUPTED
-        item.error = 'Sayfa kapatıldığı için işleme yarıda kaldı — yeniden deneyin.'
-      }
-    }
-    return items
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {}
   } catch {
     return {}
   }
 }
 
+function loadActiveJob() {
+  try {
+    return JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY))
+  } catch {
+    return null
+  }
+}
+
+function saveActiveJob(jobId) {
+  try {
+    if (jobId) localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ jobId }))
+    else localStorage.removeItem(ACTIVE_JOB_KEY)
+  } catch {
+    /* opsiyonel */
+  }
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
 export function QueueProvider({ children }) {
-  const [items, setItems] = useState(loadPersisted)
+  const [items, setItems] = useState(loadPersistedItems)
   const [uploading, setUploading] = useState(false)
   const [processing, setProcessing] = useState(false)
 
-  // Stale-closure'a düşmemek için güncel state ref'te tutulur
   const itemsRef = useRef(items)
   itemsRef.current = items
   const processingRef = useRef(false)
   const stepStartTimes = useRef({})
 
-  // Kalıcılık — her değişiklikte son durum yazılır
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
     } catch {
-      /* quota vb. — kalıcılık opsiyoneldir */
+      /* opsiyonel */
     }
   }, [items])
 
@@ -125,12 +129,53 @@ export function QueueProvider({ children }) {
       }))
       toast.error(`${filename} işlenemedi.`)
     }
+    // job_start / complete: durum güncellemesi gerektirmez
   }, [updateItem])
 
   /**
-   * Kuyruk işleyicisi: "queued" ne varsa toplar, /bulk-process'e verir;
-   * akış bitince bu sırada yeni eklenenler için yeni tur başlatır.
+   * Job'ın olay akışını, kopmalarda kaldığı index'ten devam ederek sonuna
+   * kadar tüketir. Job sunucudan silinmişse ilgili item'ları interrupted yapar.
    */
+  const followJob = useCallback(async (jobId, sinceIndex = 0) => {
+    saveActiveJob(jobId)
+    let index = sinceIndex
+    let attempt = 0
+
+    while (true) {
+      try {
+        index = await streamJobEvents(jobId, handleSseEvent, { since: index })
+        saveActiveJob(null)
+        return true // akış normal kapandı → job bitti
+      } catch (err) {
+        if (err.jobNotFound) {
+          setItems((prev) =>
+            Object.fromEntries(
+              Object.entries(prev).map(([k, item]) => [
+                k,
+                item.status === QUEUE_STATUS.RUNNING || item.status === QUEUE_STATUS.QUEUED
+                  ? { ...item, status: QUEUE_STATUS.INTERRUPTED, error: err.message }
+                  : item,
+              ])
+            )
+          )
+          saveActiveJob(null)
+          toast.error(err.message)
+          return false
+        }
+        attempt += 1
+        if (attempt > MAX_RECONNECT_ATTEMPTS) {
+          toast.error(`Olay akışına yeniden bağlanılamadı: ${err.message}`)
+          // Job sunucuda koşmaya devam ediyor — aktif job kaydını KORU ki
+          // sayfa yenilenince tekrar bağlanılabilsin.
+          return false
+        }
+        toast(`Bağlantı koptu, yeniden deneniyor (${attempt}/${MAX_RECONNECT_ATTEMPTS})...`)
+        await sleep(1000 * attempt)
+      }
+    }
+  }, [handleSseEvent])
+
+  /** queued item'ları job'lara çevirip akışlarını sonuna kadar izler. */
   const drainQueue = useCallback(async () => {
     if (processingRef.current) return
     processingRef.current = true
@@ -143,26 +188,68 @@ export function QueueProvider({ children }) {
           .map((i) => i.filename)
         if (pending.length === 0) break
 
+        let jobId
         try {
-          await streamBulkProcess(pending, handleSseEvent)
+          const res = await startBulkProcess(pending)
+          jobId = res.job_id
         } catch (err) {
-          // Akış kurulamadı/koptu — bu turdaki tamamlanmamışlar interrupted
           for (const filename of pending) {
-            updateItem(filename, (item) =>
-              item.status === QUEUE_STATUS.DONE || item.status === QUEUE_STATUS.FAILED
-                ? item
-                : { ...item, status: QUEUE_STATUS.INTERRUPTED, error: err.message }
-            )
+            updateItem(filename, (item) => ({
+              ...item,
+              status: QUEUE_STATUS.INTERRUPTED,
+              error: err.userMessage ?? err.message,
+            }))
           }
-          toast.error(`Pipeline bağlantısı: ${err.message}`)
+          toast.error(`Job başlatılamadı: ${err.userMessage ?? err.message}`)
           break
         }
+
+        const finished = await followJob(jobId, 0)
+        if (!finished) break
       }
     } finally {
       processingRef.current = false
       setProcessing(false)
     }
-  }, [handleSseEvent, updateItem])
+  }, [followJob, updateItem])
+
+  // ---- Açılışta hydration: yarıda kalan job'a yeniden bağlan ----
+  useEffect(() => {
+    const stored = loadActiveJob()
+    if (!stored?.jobId) {
+      // Devam eden job yok: önceki oturumdan running/queued kalıntıları düşmüş demektir
+      setItems((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).map(([k, item]) => [
+            k,
+            item.status === QUEUE_STATUS.RUNNING || item.status === QUEUE_STATUS.QUEUED
+              ? {
+                  ...item,
+                  status: QUEUE_STATUS.INTERRUPTED,
+                  error: 'Önceki oturumda job başlatılamadan kapatıldı — yeniden deneyin.',
+                }
+              : item,
+          ])
+        )
+      )
+      return
+    }
+
+    // Sunucudaki job'a yeniden bağlan: olaylar 0'dan replay edilir,
+    // durum (bu arada sunucuda tamamlananlar dahil) aynen yeniden kurulur.
+    ;(async () => {
+      processingRef.current = true
+      setProcessing(true)
+      try {
+        await followJob(stored.jobId, 0)
+      } finally {
+        processingRef.current = false
+        setProcessing(false)
+        drainQueue() // bu oturumda birikmiş queued varsa devam et
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** Dosyaları yükler ve kuyruğa ekler — işleme sürüyorsa sıraya girerler. */
   const enqueueFiles = useCallback(async (files) => {
@@ -187,19 +274,12 @@ export function QueueProvider({ children }) {
       ...Object.fromEntries(uploaded.map((f) => [f, makeItem(f)])),
     }))
     toast.success(`${uploaded.length} dosya kuyruğa eklendi`)
-    // State güncellemesi işlensin diye microtask sonrası başlat
     queueMicrotask(drainQueue)
   }, [drainQueue])
 
   /** Başarısız/yarıda kalmış tek bir CV'yi yeniden kuyruğa alır. */
   const retryItem = useCallback((filename) => {
-    updateItem(filename, (item) => ({
-      ...item,
-      status: QUEUE_STATUS.QUEUED,
-      steps: makeItem(filename).steps,
-      error: null,
-      addedAt: Date.now(),
-    }))
+    updateItem(filename, () => makeItem(filename))
     queueMicrotask(drainQueue)
   }, [updateItem, drainQueue])
 
