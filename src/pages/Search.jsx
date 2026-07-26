@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import SearchBar from '../components/SearchBar'
-import ResultCard from '../components/ResultCard'
+import SearchBar from '../components/search/SearchBar'
+import ResultCard from '../components/search/ResultCard'
 import { recommendCandidates } from '../api'
 
 const EXAMPLE_QUERIES = [
@@ -39,10 +39,24 @@ export default function Search() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-slate-800 mb-1">Aday Arama</h1>
-      <p className="text-slate-500 text-sm mb-6">
-        Doğal dil ile aday arayın. LangGraph agent + GraphRAG pipeline.
-      </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 mb-1">Aday Arama</h1>
+          <p className="text-slate-500 text-sm">
+            Doğal dil ile aday arayın. Takip soruları desteklenir
+            (örn: &quot;bunlardan en deneyimli 3&apos;ü?&quot;).
+          </p>
+        </div>
+        {sessionId && (
+          <button
+            onClick={() => { setSessionId(null); setResult(null); setQuery(''); setError(null) }}
+            title="Konuşma hafızasını sıfırlayıp bağımsız yeni arama başlatır"
+            className="text-xs text-slate-500 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors shrink-0"
+          >
+            ⟳ Yeni oturum
+          </button>
+        )}
+      </div>
 
       <SearchBar
         value={query}

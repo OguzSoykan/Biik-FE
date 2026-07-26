@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import CandidateTable from '../components/CandidateTable'
-import CandidateDetail from '../components/CandidateDetail'
+import CandidateTable from '../components/candidates/CandidateTable'
+import CandidateDetail from '../components/candidates/CandidateDetail'
 import { getCandidates } from '../api'
 
 const STATUS_OPTIONS = [

@@ -1,4 +1,5 @@
 import FeedbackButtons from './FeedbackButtons'
+import ScoreBreakdown from './ScoreBreakdown'
 
 export default function ResultCard({ candidate, rank, query, sessionId }) {
   const score = candidate.score ?? 0
@@ -89,19 +90,24 @@ export default function ResultCard({ candidate, rank, query, sessionId }) {
         </div>
       )}
 
-      {/* Nedensellik (evidence) */}
-      {candidate.evidence?.length > 0 && (
+      {/* Nedensellik: alt skorlar + evidence */}
+      {(candidate.breakdown || candidate.evidence?.length > 0) && (
         <details>
           <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
             Puan gerekçesini göster
           </summary>
-          <ul className="mt-1.5 space-y-1">
-            {candidate.evidence.slice(0, 5).map((ev, i) => (
-              <li key={i} className="text-xs text-slate-500 font-mono leading-relaxed">
-                {ev}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2 space-y-2.5">
+            <ScoreBreakdown breakdown={candidate.breakdown} />
+            {candidate.evidence?.length > 0 && (
+              <ul className="space-y-1 border-t border-slate-100 pt-2">
+                {candidate.evidence.slice(0, 5).map((ev, i) => (
+                  <li key={i} className="text-xs text-slate-500 font-mono leading-relaxed">
+                    {ev}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </details>
       )}
 

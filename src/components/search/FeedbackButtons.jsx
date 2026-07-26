@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { sendFeedback } from '../api'
+import { sendFeedback } from '../../api/feedback'
 
 /**
  * Aday kartındaki 👍/👎 geri bildirim butonları.

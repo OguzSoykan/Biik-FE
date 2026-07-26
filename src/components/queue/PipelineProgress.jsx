@@ -1,10 +1,4 @@
-const STEPS = [
-  { key: 'ingest', label: 'Yükleme' },
-  { key: 'convert', label: 'Dönüştürme' },
-  { key: 'extract', label: 'Extraction' },
-  { key: 'embed', label: 'Embedding' },
-  { key: 'write', label: "Memgraph'a Yazma" },
-]
+import { PIPELINE_STEPS } from '../../constants/pipeline'
 
 function formatDuration(ms) {
   if (ms == null) return null
@@ -39,7 +33,6 @@ function StepRow({ step, state }) {
 
   return (
     <div className="flex items-center justify-between px-5 py-3">
-      {/* İkon + etiket */}
       <div className="flex items-center gap-3">
         <StepIcon status={status} />
         <span className="text-sm text-slate-700">{step.label}</span>
@@ -50,11 +43,8 @@ function StepRow({ step, state }) {
         )}
       </div>
 
-      {/* Durum / süre / hata */}
       <div className="flex items-center gap-2 min-w-0">
-        {status === 'idle' && (
-          <span className="text-xs text-slate-400">Bekliyor</span>
-        )}
+        {status === 'idle' && <span className="text-xs text-slate-400">Bekliyor</span>}
         {status === 'running' && (
           <span className="text-xs text-indigo-500 animate-pulse">Çalışıyor...</span>
         )}
@@ -64,10 +54,7 @@ function StepRow({ step, state }) {
           </span>
         )}
         {status === 'error' && error && (
-          <span
-            className="text-xs text-red-500 truncate max-w-[180px]"
-            title={error}
-          >
+          <span className="text-xs text-red-500 truncate max-w-[180px]" title={error}>
             {error}
           </span>
         )}
@@ -76,17 +63,14 @@ function StepRow({ step, state }) {
   )
 }
 
-/**
- * Props:
- *   job — job_store'dan gelen job objesi (GET /jobs response'undaki tek eleman)
- */
-export default function PipelineProgress({ job }) {
-  if (!job) return null
+/** Props: item — QueueContext'teki tek kuyruk elemanı ({steps} taşıyan her obje). */
+export default function PipelineProgress({ item }) {
+  if (!item) return null
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-      {STEPS.map((step) => {
-        const state = job.steps?.[step.key] ?? {
+      {PIPELINE_STEPS.map((step) => {
+        const state = item.steps?.[step.key] ?? {
           status: 'idle',
           cached: false,
           duration_ms: null,
