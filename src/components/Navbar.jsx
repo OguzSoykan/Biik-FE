@@ -22,6 +22,9 @@ export default function Navbar() {
           <NavLink to="/arama" className={linkClass}>
             Arama
           </NavLink>
+          <NavLink to="/feedback" className={linkClass}>
+            Geri Bildirim
+          </NavLink>
         </div>
       </div>
     </nav>

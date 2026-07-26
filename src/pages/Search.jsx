@@ -15,6 +15,7 @@ export default function Search() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const [sessionId, setSessionId] = useState(null) // konuşma hafızası — takip soruları
 
   const handleSubmit = async (q) => {
     const activeQuery = q || query
@@ -24,8 +25,9 @@ export default function Search() {
     setError(null)
     setResult(null)
     try {
-      const data = await recommendCandidates(activeQuery.trim())
+      const data = await recommendCandidates(activeQuery.trim(), sessionId)
       setResult(data)
+      if (data.session_id) setSessionId(data.session_id)
     } catch (e) {
       setError(e?.response?.data?.detail || e.message || 'Bir hata oluştu.')
     } finally {
@@ -96,7 +98,13 @@ export default function Search() {
           {hasCandidates ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {result.candidates.slice(0, 5).map((c, i) => (
-                <ResultCard key={c.id ?? i} candidate={c} rank={i + 1} />
+                <ResultCard
+                  key={c.id ?? i}
+                  candidate={c}
+                  rank={i + 1}
+                  query={result.query}
+                  sessionId={result.session_id}
+                />
               ))}
             </div>
           ) : (

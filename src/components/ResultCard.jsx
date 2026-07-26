@@ -1,4 +1,6 @@
-export default function ResultCard({ candidate, rank }) {
+import FeedbackButtons from './FeedbackButtons'
+
+export default function ResultCard({ candidate, rank, query, sessionId }) {
   const score = candidate.score ?? 0
   const oneri = candidate.oneri ?? 'belki'
 
@@ -85,6 +87,27 @@ export default function ResultCard({ candidate, rank }) {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* Nedensellik (evidence) */}
+      {candidate.evidence?.length > 0 && (
+        <details>
+          <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
+            Puan gerekçesini göster
+          </summary>
+          <ul className="mt-1.5 space-y-1">
+            {candidate.evidence.slice(0, 5).map((ev, i) => (
+              <li key={i} className="text-xs text-slate-500 font-mono leading-relaxed">
+                {ev}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {/* Geri bildirim */}
+      {candidate.id && query && (
+        <FeedbackButtons adayId={candidate.id} query={query} sessionId={sessionId} />
       )}
     </div>
   )
