@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import SearchBar from '../components/search/SearchBar'
 import ResultCard from '../components/search/ResultCard'
-import { recommendCandidates } from '../api'
+import CandidateDetail from '../components/candidates/CandidateDetail'
+import { recommendCandidates, getCandidate } from '../api'
 
 const EXAMPLE_QUERIES = [
   'Python ve machine learning deneyimi olan backend developer',
@@ -16,6 +18,24 @@ export default function Search() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [sessionId, setSessionId] = useState(null) // konuşma hafızası — takip soruları
+  const [detail, setDetail] = useState(null)       // açık aday profili (modal)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [showAll, setShowAll] = useState(false)    // ilk 5'ten fazlasını göster
+
+  const openDetail = async (adayId) => {
+    if (!adayId) return
+    setDetailLoading(true)
+    setDetail({ id: adayId, name: '', skills: [], companies: [], education: [] })
+    try {
+      const data = await getCandidate(adayId)
+      setDetail(data)
+    } catch (e) {
+      toast.error(e?.userMessage || e?.response?.data?.detail || 'Profil yüklenemedi.')
+      setDetail(null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   const handleSubmit = async (q) => {
     const activeQuery = q || query
@@ -24,6 +44,7 @@ export default function Search() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setShowAll(false)
     try {
       const data = await recommendCandidates(activeQuery.trim(), sessionId)
       setResult(data)
@@ -110,17 +131,32 @@ export default function Search() {
 
           {/* Aday kartları */}
           {hasCandidates ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {result.candidates.slice(0, 5).map((c, i) => (
-                <ResultCard
-                  key={c.id ?? i}
-                  candidate={c}
-                  rank={i + 1}
-                  query={result.query}
-                  sessionId={result.session_id}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {(showAll ? result.candidates : result.candidates.slice(0, 5)).map((c, i) => (
+                  <ResultCard
+                    key={c.id ?? i}
+                    candidate={c}
+                    rank={i + 1}
+                    query={result.query}
+                    sessionId={result.session_id}
+                    onOpen={openDetail}
+                  />
+                ))}
+              </div>
+              {result.candidates.length > 5 && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => setShowAll((v) => !v)}
+                    className="text-sm text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg px-4 py-2 hover:bg-indigo-100 transition-colors"
+                  >
+                    {showAll
+                      ? 'Daha az göster'
+                      : `Tümünü göster (${result.candidates.length - 5} aday daha)`}
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="bg-slate-50 border border-slate-200 rounded-xl px-6 py-8 text-center">
               <p className="text-slate-500 text-sm mb-2">
@@ -148,6 +184,12 @@ export default function Search() {
           )}
         </div>
       )}
+
+      <CandidateDetail
+        candidate={detail}
+        loading={detailLoading}
+        onClose={() => setDetail(null)}
+      />
     </div>
   )
 }

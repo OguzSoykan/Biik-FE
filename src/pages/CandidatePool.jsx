@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
+import toast from 'react-hot-toast'
 import CandidateTable from '../components/candidates/CandidateTable'
 import CandidateDetail from '../components/candidates/CandidateDetail'
-import { getCandidates } from '../api'
+import { getCandidates, getCandidate } from '../api'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Tüm Durumlar' },
@@ -11,8 +12,25 @@ const STATUS_OPTIONS = [
 ]
 
 export default function CandidatePool() {
-  const [selected, setSelected] = useState(null)
+  const [detail, setDetail] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Satıra tıklayınca tam profili graph'tan çek (arama sonuçlarıyla aynı modal).
+  const openDetail = async (adayId) => {
+    if (!adayId) return
+    setDetailLoading(true)
+    setDetail({ id: adayId, name: '', skills: [], companies: [], education: [] })
+    try {
+      const data = await getCandidate(adayId)
+      setDetail(data)
+    } catch (e) {
+      toast.error(e?.userMessage || e?.response?.data?.detail || 'Profil yüklenemedi.')
+      setDetail(null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
 
@@ -104,7 +122,7 @@ export default function CandidatePool() {
       )}
 
       {!loading && candidates.length > 0 && (
-        <CandidateTable candidates={candidates} onSelect={setSelected} />
+        <CandidateTable candidates={candidates} onSelect={(c) => openDetail(c.id)} />
       )}
 
       {/* Pagination */}
@@ -148,7 +166,7 @@ export default function CandidatePool() {
         </div>
       )}
 
-      <CandidateDetail candidate={selected} onClose={() => setSelected(null)} />
+      <CandidateDetail candidate={detail} loading={detailLoading} onClose={() => setDetail(null)} />
     </div>
   )
 }

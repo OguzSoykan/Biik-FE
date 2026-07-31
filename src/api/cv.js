@@ -19,6 +19,12 @@ export const batchIngestFiles = async (files) => {
 
 export const getCandidates = (params = {}) => client.get('/candidates', { params })
 
+/** Tek adayın tam profili (beceri, şirket, eğitim, pozisyon, sertifika, proje). */
+export const getCandidate = async (adayId) => {
+  const res = await client.get(`/candidates/${encodeURIComponent(adayId)}`)
+  return res.data
+}
+
 // Tekil pipeline adımları — debug/manuel kullanım için korunur
 export const convertCV = (filename) => client.post('/convert', { filename })
 export const extractCV = (filename) => client.post('/extract', { filename })

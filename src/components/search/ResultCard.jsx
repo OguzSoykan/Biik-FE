@@ -1,7 +1,4 @@
-import FeedbackButtons from './FeedbackButtons'
-import ScoreBreakdown from './ScoreBreakdown'
-
-export default function ResultCard({ candidate, rank, query, sessionId }) {
+export default function ResultCard({ candidate, rank, onOpen }) {
   const score = candidate.score ?? 0
   const oneri = candidate.oneri ?? 'belki'
 
@@ -21,8 +18,14 @@ export default function ResultCard({ candidate, rank, query, sessionId }) {
     hayır:  { label: 'Uygun Değil',    cls: 'bg-red-50 text-red-600 border-red-200' },
   }[oneri] ?? { label: oneri, cls: 'bg-slate-100 text-slate-500 border-slate-200' }
 
+  const clickable = Boolean(onOpen && candidate.id)
+
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-shadow flex flex-col gap-4">
+    <div
+      onClick={clickable ? () => onOpen(candidate.id) : undefined}
+      title={clickable ? 'Tüm profili gör' : undefined}
+      className={`bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-shadow flex flex-col gap-4 ${clickable ? 'cursor-pointer hover:border-indigo-300' : ''}`}
+    >
 
       {/* Üst satır: sıra + isim + puan */}
       <div className="flex items-start justify-between gap-3">
@@ -33,7 +36,7 @@ export default function ResultCard({ candidate, rank, query, sessionId }) {
             </span>
           )}
           <div>
-            <h3 className="font-semibold text-slate-800 leading-tight">{candidate.name}</h3>
+            <h3 className="font-semibold text-slate-800 leading-tight hover:text-indigo-700">{candidate.name}</h3>
             <span className={`text-xs font-medium border rounded-full px-2.5 py-0.5 mt-1 inline-block ${oneriBadge.cls}`}>
               {oneriBadge.label}
             </span>
@@ -90,30 +93,9 @@ export default function ResultCard({ candidate, rank, query, sessionId }) {
         </div>
       )}
 
-      {/* Nedensellik: alt skorlar + evidence */}
-      {(candidate.breakdown || candidate.evidence?.length > 0) && (
-        <details>
-          <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
-            Puan gerekçesini göster
-          </summary>
-          <div className="mt-2 space-y-2.5">
-            <ScoreBreakdown breakdown={candidate.breakdown} />
-            {candidate.evidence?.length > 0 && (
-              <ul className="space-y-1 border-t border-slate-100 pt-2">
-                {candidate.evidence.slice(0, 5).map((ev, i) => (
-                  <li key={i} className="text-xs text-slate-500 font-mono leading-relaxed">
-                    {ev}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </details>
-      )}
 
-      {/* Geri bildirim */}
-      {candidate.id && query && (
-        <FeedbackButtons adayId={candidate.id} query={query} sessionId={sessionId} />
+      {clickable && (
+        <span className="text-xs text-indigo-500 mt-1">Tüm profili gör →</span>
       )}
     </div>
   )
