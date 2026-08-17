@@ -17,7 +17,6 @@ export default function Search() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
-  const [sessionId, setSessionId] = useState(null) // konuşma hafızası — takip soruları
   const [detail, setDetail] = useState(null)       // açık aday profili (modal)
   const [detailLoading, setDetailLoading] = useState(false)
   const [showAll, setShowAll] = useState(false)    // ilk 5'ten fazlasını göster
@@ -46,9 +45,9 @@ export default function Search() {
     setResult(null)
     setShowAll(false)
     try {
-      const data = await recommendCandidates(activeQuery.trim(), sessionId)
+      // Her arama bağımsızdır — session/konuşma hafızası kullanılmaz.
+      const data = await recommendCandidates(activeQuery.trim())
       setResult(data)
-      if (data.session_id) setSessionId(data.session_id)
     } catch (e) {
       setError(e?.response?.data?.detail || e.message || 'Bir hata oluştu.')
     } finally {
@@ -60,23 +59,12 @@ export default function Search() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-1">Aday Arama</h1>
-          <p className="text-slate-500 text-sm">
-            Doğal dil ile aday arayın. Takip soruları desteklenir
-            (örn: &quot;bunlardan en deneyimli 3&apos;ü?&quot;).
-          </p>
-        </div>
-        {sessionId && (
-          <button
-            onClick={() => { setSessionId(null); setResult(null); setQuery(''); setError(null) }}
-            title="Konuşma hafızasını sıfırlayıp bağımsız yeni arama başlatır"
-            className="text-xs text-slate-500 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors shrink-0"
-          >
-            ⟳ Yeni oturum
-          </button>
-        )}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-800 mb-1">Aday Arama</h1>
+        <p className="text-slate-500 text-sm">
+          Aradığınız adayı doğal dille tarif edin — beceri, deneyim, eğitim veya
+          pozisyon belirtebilirsiniz. En uygun adaylar puanlanmış olarak listelenir.
+        </p>
       </div>
 
       <SearchBar
@@ -138,8 +126,6 @@ export default function Search() {
                     key={c.id ?? i}
                     candidate={c}
                     rank={i + 1}
-                    query={result.query}
-                    sessionId={result.session_id}
                     onOpen={openDetail}
                   />
                 ))}
