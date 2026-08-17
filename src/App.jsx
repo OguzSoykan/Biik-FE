@@ -5,6 +5,8 @@ import { QueueProvider } from './context/QueueContext'
 import CVManager from './pages/CVManager'
 import CandidatePool from './pages/CandidatePool'
 import Search from './pages/Search'
+import Ilanlar from './pages/Ilanlar'
+import IlanDetail from './pages/IlanDetail'
 
 export default function App() {
   return (
@@ -16,6 +18,8 @@ export default function App() {
             <Route path="/" element={<CVManager />} />
             <Route path="/havuz" element={<CandidatePool />} />
             <Route path="/arama" element={<Search />} />
+            <Route path="/ilanlar" element={<Ilanlar />} />
+            <Route path="/ilanlar/:ilanId" element={<IlanDetail />} />
           </Routes>
         </div>
         <Toaster position="bottom-right" />

@@ -1,3 +1,5 @@
+import SaveToIlanButton from './SaveToIlanButton'
+
 export default function ResultCard({ candidate, rank, onOpen }) {
   const score = candidate.score ?? 0
   const oneri = candidate.oneri ?? 'belki'
@@ -94,9 +96,17 @@ export default function ResultCard({ candidate, rank, onOpen }) {
       )}
 
 
-      {clickable && (
-        <span className="text-xs text-indigo-500 mt-1">Tüm profili gör →</span>
-      )}
+      {/* Alt satır: profil bağlantısı + ilana kaydet */}
+      <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+        {clickable ? (
+          <span className="text-xs text-indigo-500">Tüm profili gör →</span>
+        ) : (
+          <span />
+        )}
+        {candidate.id && (
+          <SaveToIlanButton adayId={candidate.id} adayAd={candidate.name} />
+        )}
+      </div>
     </div>
   )
 }
